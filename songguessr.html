@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SongGuessr: Arcade Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Press Start 2P', monospace;
+      background-color: #0d0221;
+      color: #f5f5f5;
+      overflow: hidden;
+    }
+
+    body.vibing {
+      animation: vibeBG 1.2s infinite alternate;
+    }
+
+    @keyframes vibeBG {
+      0% { background-color: #2e003e; }
+      25% { background-color: #51087e; }
+      50% { background-color: #7300a1; }
+      75% { background-color: #4a0072; }
+      100% { background-color: #2e003e; }
+    }
+
+    main {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 2rem;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      color: #ff007f;
+      font-size: 2rem;
+      text-shadow: 0 0 5px #ff00ff, 0 0 15px #ff00ff;
+      margin-bottom: 1rem;
+    }
+
+    .scores {
+      font-size: 0.75rem;
+      color: #fffa;
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 2rem;
+      justify-content: center;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    button {
+      background-color: #00ffee;
+      color: #000;
+      border: none;
+      padding: 1rem 1.5rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #00ffee;
+      transition: all 0.2s ease-in-out;
+    }
+
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px #00ffee;
+    }
+
+    #status, #buzzer, #title {
+      margin: 0.5rem 0;
+      font-size: 0.75rem;
+    }
+
+    #buzzer {
+      color: #ffff00;
+      text-shadow: 0 0 5px #ffff00;
+    }
+
+    #title span {
+      color: #00ffee;
+    }
+
+    #player {
+      width: 1px;
+      height: 1px;
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>SONGGUESSR</h1>
+
+  <div class="scores">
+    <div>Player 1 Score: <span id="score1">0</span></div>
+    <div>Player 2 Score: <span id="score2">0</span></div>
+  </div>
+
+  <div class="button-group">
+    <button id="start-round-btn">START ROUND</button>
+    <button id="skip-btn" class="hidden">SKIP ROUND</button>
+    <button id="reveal-title-btn" class="hidden">REVEAL TITLE</button>
+    <button id="correct-btn" class="hidden">✅ CORRECT</button>
+    <button id="wrong-btn" class="hidden">❌ WRONG</button>
+    <button id="next-round-btn" class="hidden">NEXT ROUND</button>
+  </div>
+
+  <p id="status">Insert coin to begin...</p>
+  <p id="buzzer" class="hidden"></p>
+  <p id="title" class="hidden">🎵 <span id="video-title"></span></p>
+
+  <div id="player-container"></div>
+  <audio id="buzzer-sound" src="static/buzzer.mp3" preload="auto"></audio>
+  <audio id="hmmm-sound" src="static/hmmm.mp3" preload="auto"></audio>
+</main>
+
+<script src="playlist.js"></script>
+<script>
+  let score1 = 0;
+  let score2 = 0;
+  let currentVideo = null;
+  let buzzed = false;
+  let buzzedPlayer = null;
+  const buzzerSound = document.getElementById("buzzer-sound");
+  const hmmmSound = document.getElementById("hmmm-sound");
+  let hmmmTimeout = null;
+
+  function updateScores() {
+    document.getElementById("score1").innerText = score1;
+    document.getElementById("score2").innerText = score2;
+  }
+
+  function resetUI() {
+    buzzed = false;
+    buzzedPlayer = null;
+    clearTimeout(hmmmTimeout);
+    hmmmSound.pause();
+    hmmmSound.currentTime = 0;
+
+    document.getElementById("buzzer").classList.add("hidden");
+    document.getElementById("title").classList.add("hidden");
+    document.getElementById("correct-btn").classList.add("hidden");
+    document.getElementById("wrong-btn").classList.add("hidden");
+    document.getElementById("next-round-btn").classList.add("hidden");
+    document.getElementById("reveal-title-btn").classList.add("hidden");
+    document.getElementById("skip-btn").classList.remove("hidden");
+    document.getElementById("status").innerText = "♫ Song is playing...";
+    document.body.classList.add("vibing");
+  }
+
+  function stopMusic() {
+    document.getElementById("player-container").innerHTML = "";
+    document.body.classList.remove("vibing");
+  }
+
+  function playSong(video) {
+    const start = Math.floor(Math.random() * 31) + 30;
+    const iframe = document.createElement('iframe');
+    iframe.id = "player";
+    iframe.src = `https://www.youtube.com/embed/${video.id}?autoplay=1&start=${start}&controls=0&rel=0&modestbranding=1`;
+    iframe.allow = "autoplay";
+    iframe.setAttribute("frameborder", "0");
+    document.getElementById("player-container").innerHTML = "";
+    document.getElementById("player-container").appendChild(iframe);
+  }
+
+  document.getElementById("start-round-btn").addEventListener("click", () => {
+    currentVideo = playlist[Math.floor(Math.random() * playlist.length)];
+    document.getElementById("video-title").innerText = currentVideo.title;
+    playSong(currentVideo);
+    resetUI();
+  });
+
+  document.getElementById("skip-btn").addEventListener("click", () => {
+    document.getElementById("status").innerText = `Round skipped. The song was: ${currentVideo.title}`;
+    stopMusic();
+    clearTimeout(hmmmTimeout);
+    hmmmSound.pause();
+    hmmmSound.currentTime = 0;
+    document.getElementById("title").classList.remove("hidden");
+    document.getElementById("skip-btn").classList.add("hidden");
+    document.getElementById("next-round-btn").classList.remove("hidden");
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space") {
+      e.preventDefault();
+      if (!buzzed && currentVideo) {
+        document.getElementById("skip-btn").click();
+      } else if (buzzed && !document.getElementById("reveal-title-btn").classList.contains("hidden")) {
+        document.getElementById("reveal-title-btn").click();
+      } else if (!document.getElementById("next-round-btn").classList.contains("hidden")) {
+        document.getElementById("next-round-btn").click();
+      } else if (!currentVideo) {
+        document.getElementById("start-round-btn").click();
+      }
+    }
+
+    if (buzzed || !currentVideo) return;
+    let player = null;
+    if (e.key.toLowerCase() === "s") player = "PLAYER 1";
+    else if (e.key.toLowerCase() === "k") player = "PLAYER 2";
+
+    if (player) {
+      buzzed = true;
+      buzzedPlayer = player;
+      stopMusic();
+      buzzerSound.currentTime = 0;
+      buzzerSound.play();
+
+      // Start HMMM timer
+      clearTimeout(hmmmTimeout);
+      hmmmTimeout = setTimeout(() => {
+        hmmmSound.currentTime = 0;
+        hmmmSound.play();
+        document.getElementById("status").innerText += " 💭 Still thinking?";
+      }, 10000);
+
+      document.getElementById("buzzer").innerText = `${player} BUZZED FIRST!`;
+      document.getElementById("buzzer").classList.remove("hidden");
+      document.getElementById("status").innerText = "Reveal the title and assess the guess.";
+      document.getElementById("reveal-title-btn").classList.remove("hidden");
+      document.getElementById("skip-btn").classList.add("hidden");
+    }
+  });
+
+  document.getElementById("reveal-title-btn").addEventListener("click", () => {
+    clearTimeout(hmmmTimeout);
+    hmmmSound.pause();
+    hmmmSound.currentTime = 0;
+    document.getElementById("title").classList.remove("hidden");
+    document.getElementById("correct-btn").classList.remove("hidden");
+    document.getElementById("wrong-btn").classList.remove("hidden");
+    document.getElementById("reveal-title-btn").classList.add("hidden");
+  });
+
+  document.getElementById("correct-btn").addEventListener("click", () => {
+    clearTimeout(hmmmTimeout);
+    hmmmSound.pause();
+    hmmmSound.currentTime = 0;
+    if (buzzedPlayer === "PLAYER 1") score1++;
+    else score2++;
+    document.getElementById("status").innerText = `${buzzedPlayer} was CORRECT!`;
+    document.getElementById("correct-btn").classList.add("hidden");
+    document.getElementById("wrong-btn").classList.add("hidden");
+    document.getElementById("next-round-btn").classList.remove("hidden");
+    updateScores();
+  });
+
+  document.getElementById("wrong-btn").addEventListener("click", () => {
+    clearTimeout(hmmmTimeout);
+    hmmmSound.pause();
+    hmmmSound.currentTime = 0;
+    const otherPlayer = buzzedPlayer === "PLAYER 1" ? "PLAYER 2" : "PLAYER 1";
+    if (otherPlayer === "PLAYER 1") score1++;
+    else score2++;
+    document.getElementById("status").innerText = `${buzzedPlayer} was WRONG — ${otherPlayer} gets the point!`;
+    document.getElementById("correct-btn").classList.add("hidden");
+    document.getElementById("wrong-btn").classList.add("hidden");
+    document.getElementById("next-round-btn").classList.remove("hidden");
+    updateScores();
+  });
+
+  document.getElementById("next-round-btn").addEventListener("click", () => {
+    document.getElementById("start-round-btn").click();
+  });
+</script>
+</body>
+</html>
